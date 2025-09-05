@@ -6,9 +6,12 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Bienvenido</Text>
-      <Text style={styles.subtitle}>
-        Sesion iniciada correctamente.
-      </Text>
+      <Text style={styles.subtitle}>Sesion iniciada correctamente.</Text>
+
+      <Pressable style={[styles.button, { backgroundColor: '#10b981' }]} onPress={() => router.push('/admin/products')}>
+        <Text style={styles.buttonText}>Panel de productos</Text>
+      </Pressable>
+
       <Pressable style={styles.button} onPress={() => router.replace('/')}>
         <Text style={styles.buttonText}>Cerrar sesión</Text>
       </Pressable>

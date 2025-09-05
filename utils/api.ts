@@ -1,4 +1,3 @@
-// utils/api.ts
 export type RecognizeOutcome =
   | { kind: 'ok'; cuil?: string; score?: number; raw?: any }
   | { kind: 'no_face'; raw?: any }
@@ -8,10 +7,9 @@ export type RecognizeOutcome =
 type RegisterParams = { cuil: string; uri: string };
 type RecognizeParams = { uri: string };
 
-const BASE = 'https://52ve8mm1q0ra.share.zrok.io';
+const BASE = 'https://ixk9cqrvwl5t.share.zrok.io';
 const COMMON_HEADERS = { 'skip_zrok_interstitial': 'true' as const };
 
-// ---------- Helpers ----------
 async function safeJson(res: Response) {
   try {
     const txt = await res.text();
@@ -21,7 +19,6 @@ async function safeJson(res: Response) {
   }
 }
 
-// ---------- Registro ----------
 export async function registerFace({ cuil, uri }: RegisterParams): Promise<{ success: boolean; raw?: any }> {
   const form = new FormData();
   form.append('cuil', cuil);
@@ -48,8 +45,6 @@ export async function registerFace({ cuil, uri }: RegisterParams): Promise<{ suc
 
   return { success: true, raw: data };
 }
-
-// ---------- Reconocimiento ----------
 export async function recognizeFace({ uri }: RecognizeParams): Promise<RecognizeOutcome> {
   const form = new FormData();
   form.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
@@ -80,8 +75,6 @@ export async function recognizeFace({ uri }: RecognizeParams): Promise<Recognize
 
   const code = (data?.code || data?.status || '').toString().toLowerCase();
   const message = msg(data);
-
-  // Casos claros de "no hay rostro"
   if (
     status === 422 ||
     status === 400 ||
@@ -91,7 +84,6 @@ export async function recognizeFace({ uri }: RecognizeParams): Promise<Recognize
     return { kind: 'no_face', raw: data };
   }
 
-  // ---- NUEVO: interpretar "matches" ----
   const matches: any[] = Array.isArray(data?.matches) ? data.matches : [];
   let matchFromArray: string | undefined = undefined;
   for (const m of matches) {
@@ -107,13 +99,9 @@ export async function recognizeFace({ uri }: RecognizeParams): Promise<Recognize
       }
     }
   }
-
-  // Éxito genérico: aceptamos varias convenciones + si hay matches
   const success = Boolean(
     data?.success || data?.matched || data?.recognized || matches.length > 0 || (status >= 200 && status < 300)
   );
-
-  // Extraer CUIL/identidad desde múltiples posibles campos (incluye matches)
   const cuil =
     matchFromArray ??
     data?.cuil ??
@@ -125,7 +113,6 @@ export async function recognizeFace({ uri }: RecognizeParams): Promise<Recognize
     data?.identity ??
     undefined;
 
-  // Puntaje de similitud (opcional)
   const scoreRaw = data?.score ?? data?.similarity ?? data?.confidence ?? undefined;
   const distance = data?.distance ?? undefined;
   const score =
@@ -149,9 +136,6 @@ export async function recognizeFace({ uri }: RecognizeParams): Promise<Recognize
 
   return { kind: 'error', message: message || `HTTP ${status}`, raw: data };
 }
-
-// ---------- Verificar si un CUIL está registrado (opcional) ----------
-// Devuelve: true (existe), false (no existe), undefined (el backend no expone endpoint para verificar).
 export async function isCuilRegistered(cuil: string): Promise<boolean | undefined> {
   const tryRequests = [
     { url: `${BASE}/exists/${encodeURIComponent(cuil)}`, method: 'GET' as const },
@@ -172,7 +156,6 @@ export async function isCuilRegistered(cuil: string): Promise<boolean | undefine
       }
       if (res.status === 404) return false;
     } catch {
-      // ignoramos y probamos el siguiente
     }
   }
 

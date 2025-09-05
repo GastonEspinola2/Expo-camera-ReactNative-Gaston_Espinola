@@ -31,9 +31,8 @@ export default function FaceLoginScreen() {
       setReadyToScan(false);
       return;
     }
-    // No hay verificación remota (tu backend no la expone). Habilitamos el escaneo.
     setReadyToScan(true);
-    await AsyncStorage.setItem('faceCuil', clean); // opcional: lo guardamos local para conveniencia
+    await AsyncStorage.setItem('faceCuil', clean);
   };
 
   const handleLogin = async () => {
@@ -50,7 +49,6 @@ export default function FaceLoginScreen() {
     try {
       setLoading(true);
 
-      // Captura silenciosa con fallback a foto
       let photoUri: string;
       try {
         photoUri = await captureSilentImage();
@@ -87,7 +85,6 @@ export default function FaceLoginScreen() {
         return;
       }
 
-      // OK
       router.replace('/home');
     } catch (err) {
       const msg = (err as Error).message || 'Error en reconocimiento facial.';
@@ -99,7 +96,6 @@ export default function FaceLoginScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
-      {/* Paso 1: CUIL */}
       <View style={styles.topPanel}>
         <Text style={styles.label}>CUIL</Text>
         <TextInput
@@ -108,7 +104,7 @@ export default function FaceLoginScreen() {
           value={cuilInput}
           onChangeText={(t) => {
             setCuilInput(t);
-            setReadyToScan(false); // si cambian el CUIL, hay que re-habilitar
+            setReadyToScan(false);
           }}
           keyboardType="number-pad"
           style={styles.input}
@@ -126,10 +122,8 @@ export default function FaceLoginScreen() {
         </Text>
       </View>
 
-      {/* Paso 2: Cámara */}
       <CameraView ref={cameraRef} style={{ flex: 1 }} facing="front" ratio="16:9" />
 
-      {/* Paso 3: Escanear y entrar */}
       <View style={styles.bottom}>
         <Pressable
           style={[
