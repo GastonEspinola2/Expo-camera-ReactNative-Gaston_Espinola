@@ -1,56 +1,41 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Product, loadProducts, saveProducts } from '../../storage/products';
 
-type Product = {
-  id: string;
-  code: string;
-  name: string;
-  price?: number;
-};
+export default function ProductsAdminFormScreen() {
+  const router = useRouter();
 
-// Datos locales, se mantienen en memoria
-const initialProducts: Product[] = [
-  { id: 'p1', code: 'EAN13-7791234567890', name: 'Botella de agua 500ml', price: 1200 },
-  { id: 'p2', code: 'QR-ABC-001', name: 'Cuaderno rayado A4', price: 3500 },
-];
-
-export default function ProductsScreen() {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [loading, setLoading] = useState(false);
-
-  // Form state
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [price, setPrice] = useState<string>('');
+  const [loading, setLoading] = useState(false);
 
-  // Scanner
+  const [products, setProducts] = useState<Product[]>([]);
+
   const [permission, requestPermission] = useCameraPermissions();
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanLock, setScanLock] = useState(false);
 
   useEffect(() => {
-    // pedir permiso si abre el escáner
-    if (scannerOpen && (!permission || !permission.granted)) {
-      requestPermission();
-    }
-  }, [scannerOpen]);
-
-  // Helpers
-  const resetForm = () => {
-    setEditingId(null);
-    setCode('');
-    setName('');
-    setPrice('');
-  };
-
-  const fillFormForEdit = (p: Product) => {
-    setEditingId(p.id);
-    setCode(p.code);
-    setName(p.name);
-    setPrice(p.price ? String(p.price) : '');
-  };
+    (async () => {
+      const existing = await loadProducts();
+      setProducts(existing);
+      if (!permission || !permission.granted) {
+        await requestPermission();
+      }
+    })();
+  }, []);
 
   const validate = () => {
     if (!code.trim()) {
@@ -61,9 +46,8 @@ export default function ProductsScreen() {
       Alert.alert('Datos incompletos', 'Ingresá un nombre.');
       return false;
     }
-    const priceNum = price.trim() ? Number(price) : undefined;
-    if (price.trim() && Number.isNaN(priceNum)) {
-      Alert.alert('Precio inválido', 'El precio debe ser numérico.');
+    if (price.trim() && Number.isNaN(Number(price))) {
+      Alert.alert('Precio inválido', 'Debe ser numérico.');
       return false;
     }
     return true;
@@ -75,26 +59,23 @@ export default function ProductsScreen() {
       setLoading(true);
 
       const priceNum = price.trim() ? Number(price) : undefined;
+      const newP: Product = {
+        id: `p-${Date.now()}`,
+        code: code.trim(),
+        name: name.trim(),
+        price: priceNum,
+      };
 
-      if (editingId) {
-        // Modificar producto
-        setProducts((prev) =>
-          prev.map((p) => (p.id === editingId ? { ...p, code: code.trim(), name: name.trim(), price: priceNum } : p))
-        );
-        resetForm();
-        Alert.alert('Éxito', 'Producto modificado correctamente.');
-      } else {
-        // crear producto
-        const newProduct: Product = {
-          id: `p-${Date.now()}`,
-          code: code.trim(),
-          name: name.trim(),
-          price: priceNum,
-        };
-        setProducts((prev) => [newProduct, ...prev]);
-        resetForm();
-        Alert.alert('Éxito', 'Producto agregado correctamente.');
-      }
+      const next = [newP, ...products];
+      await saveProducts(next);
+
+      setCode('');
+      setName('');
+      setPrice('');
+
+      Alert.alert('Éxito', 'Producto agregado correctamente.', [
+        { text: 'OK', onPress: () => router.replace('/products') },
+      ]);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'No se pudo guardar el producto.');
     } finally {
@@ -102,27 +83,11 @@ export default function ProductsScreen() {
     }
   };
 
-  const onDelete = (id: string) => {
-    Alert.alert('Eliminar', '¿Seguro que querés eliminar este producto?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: () => {
-          setProducts((prev) => prev.filter((p) => p.id !== id));
-          if (editingId === id) resetForm();
-          Alert.alert('Éxito', 'Producto eliminado.');
-        },
-      },
-    ]);
-  };
-
-  // Scaner
   const openScanner = async () => {
     if (!permission || !permission.granted) {
       const { granted } = await requestPermission();
       if (!granted) {
-        Alert.alert('Permiso requerido', 'Se necesita acceso a la cámara para escanear códigos.');
+        Alert.alert('Permiso requerido', 'Se necesita acceso a la cámara.');
         return;
       }
     }
@@ -130,41 +95,28 @@ export default function ProductsScreen() {
     setScannerOpen(true);
   };
 
-  const handleBarcodeScanned = (result: { data: string; type: string }) => {
+  const handleBarcode = (event: any) => {
     if (scanLock) return;
-    setScanLock(true);
 
-    try {
-      const parsed = `${result.type}-${result.data}`;
-      setCode(parsed);
-      Alert.alert('Código leído', parsed);
-      setScannerOpen(false);
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'No se pudo interpretar el código.');
-      setScanLock(false);
+    let payload: { data?: string; type?: string } | null = null;
+    if (event?.data && event?.type) {
+      payload = { data: String(event.data), type: String(event.type) };
+    } else if (Array.isArray(event?.barcodes) && event.barcodes[0]?.data) {
+      payload = { data: String(event.barcodes[0].data), type: String(event.barcodes[0].type) };
     }
+    if (!payload?.data || !payload?.type) return;
+
+    setScanLock(true);
+    const parsed = `${String(payload.type).toLowerCase()}-${payload.data}`;
+    setCode(parsed);
+    Alert.alert('Código leído', parsed);
+    setScannerOpen(false);
+    setTimeout(() => setScanLock(false), 700);
   };
-
-  const renderItem = ({ item }: { item: Product }) => (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>{item.name}</Text>
-      <Text style={styles.cardSub}>Código: {item.code}</Text>
-      <Text style={styles.cardSub}>Precio: {item.price != null ? `$ ${item.price}` : '-'}</Text>
-
-      <View style={styles.row}>
-        <Pressable style={[styles.btn, { backgroundColor: '#64748b' }]} onPress={() => fillFormForEdit(item)}>
-          <Text style={styles.btnText}>Editar</Text>
-        </Pressable>
-        <Pressable style={[styles.btn, { backgroundColor: '#ef4444' }]} onPress={() => onDelete(item.id)}>
-          <Text style={styles.btnText}>Eliminar</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>{editingId ? 'Modificar producto' : 'Agregar producto'}</Text>
+      <Text style={styles.sectionTitle}>Agregar producto</Text>
 
       <View style={styles.formRow}>
         <Text style={styles.label}>Código</Text>
@@ -176,7 +128,7 @@ export default function ProductsScreen() {
             style={[styles.input, { flex: 1 }]}
             autoCapitalize="none"
           />
-          <Pressable style={[styles.btn, { backgroundColor: '#10b981', paddingHorizontal: 12 }]} onPress={openScanner}>
+          <Pressable style={[styles.btn, { backgroundColor: '#3b82f6' }]} onPress={openScanner}>
             <Text style={styles.btnText}>Escanear</Text>
           </Pressable>
         </View>
@@ -203,57 +155,31 @@ export default function ProductsScreen() {
         />
       </View>
 
-      <View style={styles.row}>
-        <Pressable
-          style={[styles.primaryBtn, loading && { opacity: 0.7 }]}
-          onPress={onSave}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{editingId ? 'Guardar cambios' : 'Agregar'}</Text>}
-        </Pressable>
+      <Pressable
+        style={[styles.primaryBtn, loading && { opacity: 0.7 }]}
+        onPress={onSave}
+        disabled={loading}
+      >
+        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Agregar</Text>}
+      </Pressable>
 
-        {editingId && (
-          <Pressable style={[styles.btn, { backgroundColor: '#94a3b8' }]} onPress={resetForm}>
-            <Text style={styles.btnText}>Cancelar</Text>
-          </Pressable>
-        )}
-      </View>
-      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Productos</Text>
-      <FlatList
-        data={products}
-        keyExtractor={(it) => it.id}
-        renderItem={renderItem}
-        ListEmptyComponent={<Text style={{ color: '#666' }}>No hay productos cargados.</Text>}
-        contentContainerStyle={{ paddingBottom: 24, gap: 12 }}
-      />
       <Modal visible={scannerOpen} animationType="slide" onRequestClose={() => setScannerOpen(false)}>
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           <CameraView
             style={{ flex: 1 }}
             facing="back"
             barcodeScannerSettings={{
-              // tipos de códigos soportados
               barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'itf14', 'pdf417'],
             }}
-            onBarcodeScanned={(event) => {
-              // @ts-ignore
-              if (event && event.data && event.type) {
-                handleBarcodeScanned({ data: event.data, type: event.type });
-              // @ts-ignore
-              } else if (Array.isArray(event?.barcodes) && event.barcodes.length > 0) {
-                // @ts-ignore
-                const b = event.barcodes[0];
-                handleBarcodeScanned({ data: b.data, type: b.type });
-              }
-            }}
+            onBarcodeScanned={handleBarcode}
           >
-            <View style={styles.overlay}>
-              <View style={styles.frame} />
-            </View>
+            <View style={styles.overlay}><View style={styles.frame} /></View>
           </CameraView>
-
           <View style={styles.scannerFooter}>
-            <Pressable style={[styles.primaryBtn, { backgroundColor: '#ef4444' }]} onPress={() => setScannerOpen(false)}>
+            <Pressable
+              style={[styles.primaryBtn, { backgroundColor: '#ef4444' }]}
+              onPress={() => setScannerOpen(false)}
+            >
               <Text style={styles.primaryText}>Cerrar escáner</Text>
             </Pressable>
           </View>
@@ -268,6 +194,7 @@ const FRAME = 260;
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#fff' },
   sectionTitle: { fontSize: 18, fontWeight: '800', marginBottom: 8 },
+
   formRow: { marginBottom: 10 },
   label: { fontSize: 13, color: '#333', marginBottom: 6 },
   input: {
@@ -275,11 +202,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, backgroundColor: '#fff'
   },
   codeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
 
   primaryBtn: {
     backgroundColor: '#3b82f6', paddingVertical: 12, paddingHorizontal: 16,
-    borderRadius: 10, alignItems: 'center', justifyContent: 'center'
+    borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginTop: 6,
   },
   primaryText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 
@@ -289,14 +215,7 @@ const styles = StyleSheet.create({
   },
   btnText: { color: '#fff', fontWeight: '600' },
 
-  card: {
-    borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 12, backgroundColor: '#fff',
-  },
-  cardTitle: { fontSize: 16, fontWeight: '700' },
-  cardSub: { fontSize: 13, color: '#555', marginTop: 2 },
-
   overlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   frame: { width: FRAME, height: FRAME, borderRadius: 16, borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)' },
-
   scannerFooter: { padding: 16, backgroundColor: '#000' },
 });
