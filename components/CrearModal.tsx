@@ -66,7 +66,7 @@ export default function CrearModal({ onCancel, onRecognized }: Props) {
       <CameraView
         ref={(r) => (cameraRef.current = r)}
         style={styles.camera}
-        facing="front"   // ✅ en SDK 50/51 se usa "facing"
+        facing="front"
         ratio="16:9"
       >
         <View style={styles.overlay}>

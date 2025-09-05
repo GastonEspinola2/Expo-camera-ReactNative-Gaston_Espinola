@@ -23,19 +23,16 @@ export default function RegisterScreen() {
     try {
       setLoading(true);
 
-      // 📸 Foto directa para mejor embedding (puede hacer “click”)
       const pic = await cameraRef.current?.takePictureAsync({ skipProcessing: true });
       if (!pic?.uri) throw new Error('No se pudo capturar la imagen.');
 
       const { raw } = await registerFace({ cuil: clean, uri: pic.uri });
 
-      // Guardar identidad local
       await AsyncStorage.multiSet([
         ['faceRegistered', 'true'],
         ['faceCuil', clean],
       ]);
 
-      // DEBUG (temporal): ver payload del server
       console.log('REGISTER RAW =>', raw);
 
       Alert.alert('Éxito', 'Rostro registrado correctamente', [

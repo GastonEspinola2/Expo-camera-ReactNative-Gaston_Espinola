@@ -46,7 +46,6 @@ export default function LoginScreen() {
 
       <Text style={styles.or}>o</Text>
 
-      {/* Flujo nuevo */}
       <Pressable style={styles.buttonCamera} onPress={() => router.push('/face-login')}>
         <Text style={styles.buttonText}>Ingresar con rostro</Text>
       </Pressable>
@@ -57,7 +56,6 @@ export default function LoginScreen() {
         </Text>
       </Pressable>
 
-      {/* Modal de cámara SIMULADA (TP5) - lo dejamos para tus pruebas */}
       <Modal visible={showCamera} animationType="slide">
         <CrearModal onCancel={() => setShowCamera(false)} onRecognized={handleFaceLoginSuccessSimulado} />
       </Modal>
